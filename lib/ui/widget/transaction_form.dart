@@ -5,14 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 
-/// Um widget reutilizável de formulário para adicionar transações de receita ou despesa
+/// Um widget reutilizável de formulário para adicionar ou editar transações
 class TransactionForm extends StatefulWidget {
-  /// Comando que deve ser observado o estado de execução
-  /// e o resultado da execução
+  /// Comando que deve ser observado o estado de execução e o resultado
   final Command1<void, Failure, TransactionEntity> submitCommand;
-
-  /// Função de callback quando o formulário é enviado
-  //final Function(TransactionEntity newTransaction) onSubmit;
 
   /// Tipo de transação (receita ou despesa)
   final TransactionType type;
@@ -20,12 +16,15 @@ class TransactionForm extends StatefulWidget {
   /// Cor do tema para o formulário
   final Color color;
 
+  /// Transação existente para edição (null = modo criação)
+  final TransactionEntity? initialTransaction;
+
   const TransactionForm({
     super.key,
-    //required this.onSubmit,
     required this.type,
     required this.color,
     required this.submitCommand,
+    this.initialTransaction,
   });
 
   @override
@@ -37,6 +36,17 @@ class _TransactionFormState extends State<TransactionForm> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    // Se vier com dados, pré-preenche os campos (modo edição)
+    if (widget.initialTransaction != null) {
+      _titleController.text = widget.initialTransaction!.title;
+      _amountController.text = widget.initialTransaction!.amount.toString();
+      _selectedDate = widget.initialTransaction!.date;
+    }
+  }
 
   @override
   void dispose() {
@@ -67,22 +77,28 @@ class _TransactionFormState extends State<TransactionForm> {
       final enteredTitle = _titleController.text;
       final enteredAmount = double.parse(_amountController.text);
 
-      final newTransaction = TransactionEntity(
-        title: enteredTitle,
-        amount: enteredAmount,
-        date: _selectedDate,
-        type: widget.type,
-      );
+      //Para edição preserva o ID original com copy
+      //Para criar usa uma entity nova
+      final transaction = widget.initialTransaction != null
+          ? widget.initialTransaction!.copyWith(
+              title: enteredTitle,
+              amount: enteredAmount,
+              date: _selectedDate,
+            )
+          : TransactionEntity(
+              title: enteredTitle,
+              amount: enteredAmount,
+              date: _selectedDate,
+              type: widget.type,
+            );
 
-      //widget.onSubmit(newTransaction);
-      await widget.submitCommand.execute(newTransaction);
+      await widget.submitCommand.execute(transaction);
 
       if (widget.submitCommand.resultSignal.value?.isFailure ?? false) {
-        // Se o comando falhar, exibe uma mensagem de erro
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Erro ao adicionar ${widget.type.nameSingular}: ${widget.submitCommand.resultSignal.value?.failureValueOrNull ?? 'Erro desconhecido'}',
+              'Erro: ${widget.submitCommand.resultSignal.value?.failureValueOrNull ?? 'Erro desconhecido'}',
             ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 2),
@@ -92,17 +108,21 @@ class _TransactionFormState extends State<TransactionForm> {
         return;
       }
 
-      // Limpa os campos do formulário
+      // Limpa os campos após sucesso
       _titleController.clear();
       _amountController.clear();
       setState(() {
         _selectedDate = DateTime.now();
       });
 
-      // Mostra uma mensagem de sucesso
+      final isEditing = widget.initialTransaction != null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${widget.type.nameSingular} Adicionada com Sucesso!'),
+          content: Text(
+            isEditing
+                ? '${widget.type.nameSingular} atualizada com sucesso!'
+                : '${widget.type.nameSingular} adicionada com sucesso!',
+          ),
           backgroundColor: widget.color,
           duration: const Duration(seconds: 2),
         ),
@@ -113,6 +133,8 @@ class _TransactionFormState extends State<TransactionForm> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.initialTransaction != null;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Form(
@@ -120,7 +142,7 @@ class _TransactionFormState extends State<TransactionForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Campo de entrada para a descrição (título)
+            // Campo de descrição
             TextFormField(
               controller: _titleController,
               decoration: InputDecoration(
@@ -139,7 +161,7 @@ class _TransactionFormState extends State<TransactionForm> {
             ),
             const SizedBox(height: 16),
 
-            // Campo de entrada para o valor
+            // Campo de valor
             TextFormField(
               controller: _amountController,
               decoration: InputDecoration(
@@ -149,9 +171,7 @@ class _TransactionFormState extends State<TransactionForm> {
                 ),
                 prefixIcon: const Icon(Icons.attach_money),
               ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Informe um valor';
@@ -167,7 +187,7 @@ class _TransactionFormState extends State<TransactionForm> {
             ),
             const SizedBox(height: 16),
 
-            // Seção para exibir e escolher a data
+            // Seletor de data
             Row(
               children: [
                 Expanded(
@@ -190,36 +210,36 @@ class _TransactionFormState extends State<TransactionForm> {
             ),
             const SizedBox(height: 32),
 
-            // Botão de envio do formulário
+            // Botão de envio — observa o estado do command
             Watch((context) {
               final isRunning = widget.submitCommand.runningSignal.value;
 
               return SizedBox(
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _submitForm,
+                  onPressed: isRunning ? null : _submitForm,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: widget.color,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child:
-                      isRunning
-                          ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          )
-                          : Text(
-                            'Adicionar ${widget.type.nameSingular}',
-                            style: const TextStyle(fontSize: 16),
+                  child: isRunning
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
+                        )
+                      : Text(
+                          isEditing
+                              ? 'Salvar Alterações'
+                              : 'Adicionar ${widget.type.nameSingular}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
                 ),
               );
             }),
