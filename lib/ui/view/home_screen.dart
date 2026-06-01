@@ -1,11 +1,13 @@
 import '../../common/config/dependencies.dart';
 import '../../domain/entity/transaction_entity.dart';
 import 'package:financial_tracker/ui/controller/home_page_controller.dart';
+import 'package:financial_tracker/ui/view/dashboard_screen.dart';
 import 'package:financial_tracker/ui/widget/date_filter_transactions.dart';
 import 'package:financial_tracker/ui/widget/summary_carousel.dart';
 import 'package:financial_tracker/ui/widget/transaction_sheet.dart';
 import 'package:financial_tracker/ui/widget/transaction_sheets_card.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,9 +23,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Busca o controller já registrado no injetor de dependências
     viewModelController = injector.get<HomePageController>();
     viewModelController.load.execute();
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  }
+
+  String _getFormattedDate() {
+    return DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(DateTime.now());
   }
 
   @override
@@ -32,13 +44,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Controle Financeiro',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
         elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _getGreeting(),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
+            ),
+            const Text(
+              'Controle Financeiro',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(28),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(left: 16, bottom: 8),
+            child: Text(
+              _getFormattedDate(),
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onPrimary.withValues(alpha: 0.8),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ),
         actions: [
           Watch((context) {
             final isVisible = viewModelController.isFilterVisible.value;
@@ -49,9 +85,16 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }),
           IconButton(
-            icon: const Icon(Icons.receipt_long),
-            onPressed: () {},
-            tooltip: 'Visualizar todas as transações',
+            icon: const Icon(Icons.dashboard_outlined),
+            tooltip: 'Dashboard',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const DashboardScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -61,8 +104,6 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             const SizedBox(height: 8),
-
-            // Carrossel de resumo observa os totais do controlle
             Watch((context) {
               final income = viewModelController.totalIncome.value;
               final expense = viewModelController.totalExpense.value;
@@ -71,8 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 totalExpense: expense,
               );
             }),
-
-            // Filtro de data animado, controlado pelo signal do controller
             Watch((context) {
               final isVisible = viewModelController.isFilterVisible.value;
               return AnimatedContainer(
@@ -99,16 +138,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         onAllTransactionsFiltered: () {
                           viewModelController.load.execute();
                         },
-                        // Bug corrigido: agora usa o toggleFilterVisibility
-                        // do controller, não o método local da view
                         onTapHideFilter:
                             viewModelController.toggleFilterVisibility,
                       )
                     : const SizedBox.shrink(),
               );
             }),
-
-            // Botões de adicionar receita e despesa
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -135,8 +170,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
-            // Lista de transações — observa os signals de receitas e despesas
             Watch((context) {
               final incomes = viewModelController.incomes.value;
               final expenses = viewModelController.expenses.value;
@@ -146,8 +179,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 onDelete: (id) {
                   viewModelController.deleteTransaction.execute(id);
                 },
-                // onEdit: abre o sheet em modo edição com os dados da transação
-                // e usa o editTransaction command em vez do saveTransaction
                 onEdit: (transaction) {
                   _showEditSheet(context, transaction);
                 },
@@ -155,7 +186,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 scaffoldContext: context,
               );
             }),
-
             const SizedBox(height: 32),
           ],
         ),
@@ -182,7 +212,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Abre o sheet para adicionar uma transação nova
   void _showAddSheet(BuildContext context, TransactionType type) {
     TransactionSheet.show(
       context: context,
@@ -191,8 +220,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Abre o sheet para editar uma transação existente
-  /// Passa a transação como initialTransaction e usa o editTransaction command
   void _showEditSheet(BuildContext context, TransactionEntity transaction) {
     TransactionSheet.show(
       context: context,

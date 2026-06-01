@@ -43,22 +43,22 @@ class TransactionFakeRepository {
     transactions.removeAt(index);
   }
 
-  Future<void> addData(String transactionJson) async {
-    await Future.delayed(const Duration(seconds: 2));
+ Future<void> addData(String transactionJson) async {
+  await Future.delayed(const Duration(seconds: 2));
 
-    // Simula uma falha
-    if (Random().nextBool()) {
-      Random().nextBool()
-          ? throw APIFailure(MessagesError.apiError)
-          : throw InvalidData(MessagesError.recordInvalidFormat);
-    }
+  // Removido: falha aleatória simulada pelo professor
+  // if (Random().nextBool()) {
+  //   Random().nextBool()
+  //       ? throw APIFailure(MessagesError.apiError)
+  //       : throw InvalidData(MessagesError.recordInvalidFormat);
+  // }
 
-    if (transactionJson.isEmpty) {
-      throw InvalidData(MessagesError.recordInvalidFormat);
-    }
-
-    transactions.add(TransactionEntity.fromMap(jsonDecode(transactionJson)));
+  if (transactionJson.isEmpty) {
+    throw InvalidData(MessagesError.recordInvalidFormat);
   }
+
+  transactions.add(TransactionEntity.fromMap(jsonDecode(transactionJson)));
+}
 
   Future<String> getDataByDateRange(
     DateTime startDate,
